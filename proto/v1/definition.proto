@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.funcards.authz.proto.v1";
+option java_outer_classname = "DefinitionProto";
+option go_package = "./;v1";
+option csharp_namespace = "FunCardsOrg.Grpc.V1";
+
+package proto.v1;
+
+import "google/protobuf/empty.proto";
+
+service Definition {
+  rpc SaveDefs(SaveDefsRequest) returns (google.protobuf.Empty);
+  rpc DeleteDefs(DeleteDefsRequest) returns (google.protobuf.Empty);
+  rpc GetDefs(google.protobuf.Empty) returns (DefsResponse);
+}
+
+message SaveDefsRequest {
+  message Def {
+    string def_id = 1;
+    string sec = 2;
+    string key = 3;
+    string value = 4;
+  }
+
+  repeated Def defs = 1;
+}
+
+message DeleteDefsRequest {
+  repeated string def_ids = 1;
+}
+
+message DefsResponse {
+  message Def {
+    string def_id = 1;
+    string sec = 2;
+    string key = 3;
+    string value = 4;
+  }
+
+  repeated Def defs = 1;
+}

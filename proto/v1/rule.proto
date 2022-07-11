@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.funcards.authz.proto.v1";
+option java_outer_classname = "RuleProto";
+option go_package = "./;v1";
+option csharp_namespace = "FunCardsOrg.Grpc.V1";
+
+package proto.v1;
+
+import "google/protobuf/empty.proto";
+
+service Rule {
+  rpc SaveRules(SaveRulesRequest) returns (google.protobuf.Empty);
+  rpc DeleteRules(DeleteRulesRequest) returns (google.protobuf.Empty);
+  rpc GetRules(google.protobuf.Empty) returns (RulesResponse);
+}
+
+message SaveRulesRequest {
+  message Rule {
+    string rule_id = 1;
+    string type = 2;
+    string v0 = 3;
+    string v1 = 4;
+    string v2 = 5;
+    string v3 = 6;
+    string v4 = 7;
+    string v5 = 8;
+  }
+
+  repeated Rule rules = 1;
+}
+
+message DeleteRulesRequest {
+  repeated string rule_ids = 1;
+}
+
+message RulesResponse {
+  message Rule {
+    string rule_id = 1;
+    string type = 2;
+    string v0 = 3;
+    string v1 = 4;
+    string v2 = 5;
+    string v3 = 6;
+    string v4 = 7;
+    string v5 = 8;
+  }
+
+  repeated Rule rules = 1;
+}
