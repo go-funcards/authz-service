@@ -6,21 +6,20 @@ import (
 	"github.com/go-funcards/authz-service/internal/casbin"
 	"github.com/go-funcards/authz-service/proto/v1"
 	"github.com/go-funcards/slice"
-	"log"
 )
 
 const guest = "ROLE_GUEST"
 
-type checkerService struct {
+type checkerServer struct {
 	v1.UnimplementedAuthorizationCheckerServer
 	factory casbin.Factory
 }
 
-func NewCheckerService(factory casbin.Factory) *checkerService {
-	return &checkerService{factory: factory}
+func NewCheckerServer(factory casbin.Factory) *checkerServer {
+	return &checkerServer{factory: factory}
 }
 
-func (s *checkerService) IsGranted(_ context.Context, in *v1.IsGrantedRequest) (*v1.Granted, error) {
+func (s *checkerServer) IsGranted(_ context.Context, in *v1.IsGrantedRequest) (*v1.Granted, error) {
 	params := slice.Map(in.GetParams(), func(param string) any {
 		return param
 	})
@@ -39,7 +38,6 @@ func (s *checkerService) IsGranted(_ context.Context, in *v1.IsGrantedRequest) (
 
 	e, err := s.factory(newFilter(params[0].(string), po.Ref))
 	if err == nil {
-		log.Println(e.Enforce(params...))
 		if ok, err := e.Enforce(params...); err == nil && ok {
 			return &v1.Granted{Yes: true}, nil
 		}

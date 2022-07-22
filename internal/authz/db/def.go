@@ -5,48 +5,59 @@ import (
 	"fmt"
 	"github.com/go-funcards/authz-service/internal/authz"
 	"github.com/go-funcards/mongodb"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.uber.org/zap"
 	"time"
 )
 
 var _ authz.DefinitionStorage = (*defStorage)(nil)
 
-const timeout = 5 * time.Second
+const (
+	timeout       = 5 * time.Second
+	defCollection = "authz_definitions"
+)
 
 type defStorage struct {
-	c mongodb.Collection[authz.Definition]
+	c   *mongo.Collection
+	log logrus.FieldLogger
 }
 
-func NewDefStorage(ctx context.Context, db *mongo.Database, logger *zap.Logger) (*defStorage, error) {
-	s := &defStorage{c: mongodb.Collection[authz.Definition]{
-		Inner: db.Collection("authz_definitions"),
-		Log:   logger,
-	}}
-	if err := s.indexes(ctx); err != nil {
-		return nil, err
+func NewDefStorage(ctx context.Context, db *mongo.Database, log logrus.FieldLogger) *defStorage {
+	s := &defStorage{
+		c:   db.Collection(defCollection),
+		log: log,
 	}
-	return s, nil
+	s.indexes(ctx)
+	return s
 }
 
-func (s *defStorage) indexes(ctx context.Context) error {
-	_, err := s.c.Inner.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{"sec", 1}, {"key", 1}, {"value", 1}},
-		Options: options.Index().SetUnique(true),
-	})
-	return err
-}
-
-func (s *defStorage) SaveMany(ctx context.Context, models []authz.Definition) error {
+func (s *defStorage) indexes(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var write []mongo.WriteModel
+	name, err := s.c.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{"sec", 1}, {"key", 1}, {"value", 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		s.log.WithFields(logrus.Fields{
+			"collection": defCollection,
+			"error":      err,
+		}).Fatal("index not created")
+	}
 
+	s.log.WithFields(logrus.Fields{
+		"collection": defCollection,
+		"name":       name,
+	}).Info("index created")
+}
+
+func (s *defStorage) SaveMany(ctx context.Context, models []authz.Definition) error {
+	var write []mongo.WriteModel
 	for _, model := range models {
-		data, err := s.c.ToM(model)
+		data, err := mongodb.ToBson(model)
 		if err != nil {
 			return err
 		}
@@ -61,14 +72,17 @@ func (s *defStorage) SaveMany(ctx context.Context, models []authz.Definition) er
 		)
 	}
 
-	s.c.Log.Debug("bulk update")
+	s.log.Info("defs save")
 
-	result, err := s.c.Inner.BulkWrite(ctx, write, options.BulkWrite())
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	result, err := s.c.BulkWrite(ctx, write)
 	if err != nil {
-		return fmt.Errorf(fmt.Sprintf("bulk update: %s", mongodb.ErrMsgQuery), err)
+		return fmt.Errorf(fmt.Sprintf("defs save: %s", mongodb.ErrMsgQuery), err)
 	}
 
-	s.c.Log.Info("documents updated", zap.Any("result", result))
+	s.log.WithFields(logrus.Fields{"result": result}).Info("defs saved")
 
 	return nil
 }
@@ -77,19 +91,26 @@ func (s *defStorage) DeleteMany(ctx context.Context, id ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	s.c.Log.Debug("documents delete")
-	result, err := s.c.Inner.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": id}})
+	s.log.WithField("def_ids", id).Debug("defs delete")
+	result, err := s.c.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": id}})
 	if err != nil {
 		return fmt.Errorf(mongodb.ErrMsgQuery, err)
 	}
 	if result.DeletedCount == 0 {
 		return fmt.Errorf(mongodb.ErrMsgQuery, mongo.ErrNoDocuments)
 	}
-	s.c.Log.Debug("documents deleted", zap.Int64("deleted", result.DeletedCount))
+	s.log.WithField("def_ids", id).Debug("defs deleted")
 
 	return nil
 }
 
 func (s *defStorage) Find(ctx context.Context) ([]authz.Definition, error) {
-	return s.c.Find(ctx, bson.M{})
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cur, err := s.c.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf(mongodb.ErrMsgQuery, err)
+	}
+	return mongodb.DecodeAll[authz.Definition](ctx, cur)
 }

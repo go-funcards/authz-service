@@ -5,31 +5,35 @@ import (
 	"fmt"
 	"github.com/go-funcards/authz-service/internal/authz"
 	"github.com/go-funcards/mongodb"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/bsonx"
-	"go.uber.org/zap"
 )
 
 var _ authz.RuleStorage = (*ruleStorage)(nil)
 
+const ruleCollection = "authz_rules"
+
 type ruleStorage struct {
-	c mongodb.Collection[authz.Rule]
+	c   *mongo.Collection
+	log logrus.FieldLogger
 }
 
-func NewRuleStorage(ctx context.Context, db *mongo.Database, logger *zap.Logger) (*ruleStorage, error) {
-	s := &ruleStorage{c: mongodb.Collection[authz.Rule]{
-		Inner: db.Collection("authz_rules"),
-		Log:   logger,
-	}}
-	if err := s.indexes(ctx); err != nil {
-		return nil, err
+func NewRuleStorage(ctx context.Context, db *mongo.Database, log logrus.FieldLogger) *ruleStorage {
+	s := &ruleStorage{
+		c:   db.Collection(ruleCollection),
+		log: log,
 	}
-	return s, nil
+	s.indexes(ctx)
+	return s
 }
 
-func (s *ruleStorage) indexes(ctx context.Context) error {
+func (s *ruleStorage) indexes(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	indexes := []string{"type", "v0", "v1", "v2", "v3", "v4", "v5"}
 	keysDoc := bsonx.Doc{}
 
@@ -37,21 +41,27 @@ func (s *ruleStorage) indexes(ctx context.Context) error {
 		keysDoc = keysDoc.Append(k, bsonx.Int32(1))
 	}
 
-	_, err := s.c.Inner.Indexes().CreateOne(ctx, mongo.IndexModel{
+	name, err := s.c.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    keysDoc,
 		Options: options.Index().SetUnique(true),
 	})
-	return err
+	if err != nil {
+		s.log.WithFields(logrus.Fields{
+			"collection": ruleCollection,
+			"error":      err,
+		}).Fatal("index not created")
+	}
+
+	s.log.WithFields(logrus.Fields{
+		"collection": ruleCollection,
+		"name":       name,
+	}).Info("index created")
 }
 
 func (s *ruleStorage) SaveMany(ctx context.Context, models []authz.Rule) error {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
 	var write []mongo.WriteModel
-
 	for _, model := range models {
-		data, err := s.c.ToM(model)
+		data, err := mongodb.ToBson(model)
 		if err != nil {
 			return err
 		}
@@ -66,14 +76,17 @@ func (s *ruleStorage) SaveMany(ctx context.Context, models []authz.Rule) error {
 		)
 	}
 
-	s.c.Log.Debug("bulk update")
+	s.log.Info("rules save")
 
-	result, err := s.c.Inner.BulkWrite(ctx, write, options.BulkWrite())
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	result, err := s.c.BulkWrite(ctx, write)
 	if err != nil {
-		return fmt.Errorf(fmt.Sprintf("bulk update: %s", mongodb.ErrMsgQuery), err)
+		return fmt.Errorf(fmt.Sprintf("rules save: %s", mongodb.ErrMsgQuery), err)
 	}
 
-	s.c.Log.Info("documents updated", zap.Any("result", result))
+	s.log.WithFields(logrus.Fields{"result": result}).Info("rules saved")
 
 	return nil
 }
@@ -82,19 +95,26 @@ func (s *ruleStorage) DeleteMany(ctx context.Context, id ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	s.c.Log.Debug("documents delete")
-	result, err := s.c.Inner.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": id}})
+	s.log.WithField("rule_ids", id).Debug("rules delete")
+	result, err := s.c.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": id}})
 	if err != nil {
 		return fmt.Errorf(mongodb.ErrMsgQuery, err)
 	}
 	if result.DeletedCount == 0 {
 		return fmt.Errorf(mongodb.ErrMsgQuery, mongo.ErrNoDocuments)
 	}
-	s.c.Log.Debug("documents deleted", zap.Int64("deleted", result.DeletedCount))
+	s.log.WithField("rule_ids", id).Debug("rules deleted")
 
 	return nil
 }
 
 func (s *ruleStorage) Find(ctx context.Context) ([]authz.Rule, error) {
-	return s.c.Find(ctx, bson.M{})
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cur, err := s.c.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf(mongodb.ErrMsgQuery, err)
+	}
+	return mongodb.DecodeAll[authz.Rule](ctx, cur)
 }

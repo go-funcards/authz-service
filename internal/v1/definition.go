@@ -8,38 +8,37 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-type defService struct {
+type defServer struct {
 	v1.UnimplementedDefinitionServer
 	storage authz.DefinitionStorage
 }
 
-func NewDefService(storage authz.DefinitionStorage) *defService {
-	return &defService{storage: storage}
+func NewDefServer(storage authz.DefinitionStorage) *defServer {
+	return &defServer{storage: storage}
 }
 
-func (s *defService) SaveDefs(ctx context.Context, in *v1.SaveDefsRequest) (*emptypb.Empty, error) {
+func (s *defServer) SaveDefs(ctx context.Context, in *v1.SaveDefsRequest) (*emptypb.Empty, error) {
 	if err := s.storage.SaveMany(ctx, authz.SaveDefs(in)); err != nil {
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
 }
 
-func (s *defService) DeleteDefs(ctx context.Context, in *v1.DeleteDefsRequest) (*emptypb.Empty, error) {
+func (s *defServer) DeleteDefs(ctx context.Context, in *v1.DeleteDefsRequest) (*emptypb.Empty, error) {
 	if err := s.storage.DeleteMany(ctx, in.GetDefIds()...); err != nil {
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
 }
 
-func (s *defService) GetDefs(ctx context.Context, _ *emptypb.Empty) (*v1.DefsResponse, error) {
+func (s *defServer) GetDefs(ctx context.Context, _ *emptypb.Empty) (*v1.DefsResponse, error) {
 	data, err := s.storage.Find(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	return &v1.DefsResponse{
 		Defs: slice.Map(data, func(item authz.Definition) *v1.DefsResponse_Def {
-			return item.ToResponse()
+			return item.ToProto()
 		}),
 	}, nil
 }

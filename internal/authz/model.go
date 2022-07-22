@@ -12,7 +12,7 @@ type Definition struct {
 	Value string `json:"value" bson:"value,omitempty"`
 }
 
-func (d Definition) ToResponse() *v1.DefsResponse_Def {
+func (d Definition) ToProto() *v1.DefsResponse_Def {
 	return &v1.DefsResponse_Def{
 		DefId: d.DefID,
 		Sec:   d.Sec,
@@ -43,7 +43,7 @@ type Rule struct {
 	V5     string `json:"v5" bson:"v5,omitempty"`
 }
 
-func (r Rule) ToResponse() *v1.RulesResponse_Rule {
+func (r Rule) ToProto() *v1.RulesResponse_Rule {
 	return &v1.RulesResponse_Rule{
 		RuleId: r.RuleID,
 		Type:   r.Type,
@@ -77,7 +77,7 @@ type Ref struct {
 	Delete bool     `json:"-" bson:"-"`
 }
 
-func (r Ref) ToResponse() *v1.SubResponse_Ref {
+func (r Ref) ToProto() *v1.SubResponse_Ref {
 	return &v1.SubResponse_Ref{
 		RefId: r.RefID,
 		Roles: r.Roles,
@@ -95,7 +95,7 @@ func (s Subject) ToResponse() *v1.SubResponse {
 		SubId: s.SubID,
 		Roles: s.Roles,
 		Refs: slice.Map(s.Refs, func(r Ref) *v1.SubResponse_Ref {
-			return r.ToResponse()
+			return r.ToProto()
 		}),
 	}
 }

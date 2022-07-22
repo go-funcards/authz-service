@@ -1,39 +1,40 @@
-rules:
-  v1.IsGrantedRequest:
-    Params: "omitempty,max=7"
-  v1.SaveDefsRequest_Def:
-    DefId: "required,uuid4"
-    Sec: "omitempty,alpha,len=1"
-    Key: "omitempty,alphanum,min=1,max=2"
-    Value: "omitempty,min=1,max=1000"
-  v1.SaveDefsRequest:
-    Defs: "required,min=1,dive"
-  v1.DeleteDefsRequest:
-    DefIds: "required,min=1,dive,uuid4"
-  v1.SaveRulesRequest_Rule:
-    RuleId: "required,uuid4"
-    Type: "omitempty,alphanum,min=1,max=2"
-    V0: "omitempty,min=1,max=100"
-    V1: "omitempty,min=1,max=100"
-    V2: "omitempty,min=1,max=100"
-    V3: "omitempty,min=1,max=100"
-    V4: "omitempty,min=1,max=100"
-    V5: "omitempty,min=1,max=100"
-  v1.SaveRulesRequest:
-    Rules: "required,min=1,dive"
-  v1.DeleteRulesRequest:
-    RuleIds: "required,min=1,dive,uuid4"
-  v1.SaveSubRequest_Ref:
-    RefId: "required,uuid4"
-    Roles: "required_if=Delete false,dive,min=1,max=50"
-  v1.SaveSubRequest:
-    SubId: "required,uuid4"
-    Roles: "omitempty,dive,min=1,max=50"
-    Refs: "omitempty,dive"
-  v1.DeleteSubRequest:
-    SubId: "required,uuid4"
-  v1.DeleteRefRequest:
-    RefId: "required,uuid4"
-  v1.SubRequest:
-    SubId: "required,uuid4"
-    RefId: "omitempty,uuid4"
+validation:
+  rules:
+    v1.IsGrantedRequest:
+      Params: "omitempty,max=7"
+    v1.SaveDefsRequest_Def:
+      DefId: "required,uuid4"
+      Sec: "omitempty,alpha,len=1"
+      Key: "omitempty,alphanum,min=1,max=2"
+      Value: "omitempty,min=1,max=1000"
+    v1.SaveDefsRequest:
+      Defs: "required,min=1,dive"
+    v1.DeleteDefsRequest:
+      DefIds: "required,min=1,dive,uuid4"
+    v1.SaveRulesRequest_Rule:
+      RuleId: "required,uuid4"
+      Type: "omitempty,alphanum,min=1,max=2"
+      V0: "omitempty,min=1,max=100"
+      V1: "omitempty,min=1,max=100"
+      V2: "omitempty,min=1,max=100"
+      V3: "omitempty,min=1,max=100"
+      V4: "omitempty,min=1,max=100"
+      V5: "omitempty,min=1,max=100"
+    v1.SaveRulesRequest:
+      Rules: "required,min=1,dive"
+    v1.DeleteRulesRequest:
+      RuleIds: "required,min=1,dive,uuid4"
+    v1.SaveSubRequest_Ref:
+      RefId: "required,uuid4"
+      Roles: "required_if=Delete false,dive,min=1,max=50"
+    v1.SaveSubRequest:
+      SubId: "required,uuid4"
+      Roles: "omitempty,dive,min=1,max=50"
+      Refs: "omitempty,dive"
+    v1.DeleteSubRequest:
+      SubId: "required,uuid4"
+    v1.DeleteRefRequest:
+      RefId: "required,uuid4"
+    v1.SubRequest:
+      SubId: "required,uuid4"
+      RefId: "omitempty,uuid4"

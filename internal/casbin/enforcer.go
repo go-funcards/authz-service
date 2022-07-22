@@ -3,9 +3,7 @@ package casbin
 import (
 	"context"
 	"github.com/casbin/casbin/v2"
-	"github.com/casbin/zap-logger/v2"
 	"github.com/go-funcards/authz-service/internal/authz"
-	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -15,7 +13,7 @@ type Config struct {
 
 type Factory func(filter Filter) (*casbin.Enforcer, error)
 
-func (cfg Config) EnforcerFactory(def authz.DefinitionStorage, rule authz.RuleStorage, sub authz.SubjectStorage, logger *zap.Logger) Factory {
+func (cfg Config) EnforcerFactory(def authz.DefinitionStorage, rule authz.RuleStorage, sub authz.SubjectStorage) Factory {
 	modelPath := cfg.ModelPath
 	policyPath := cfg.PolicyPath
 
@@ -31,10 +29,6 @@ func (cfg Config) EnforcerFactory(def authz.DefinitionStorage, rule authz.RuleSt
 		}
 
 		e.EnableAutoSave(false)
-
-		if logger != nil {
-			e.SetLogger(zaplogger.NewLoggerByZap(logger, true))
-		}
 
 		if err = e.LoadFilteredPolicy(filter); err != nil {
 			return nil, err
