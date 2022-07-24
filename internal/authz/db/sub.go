@@ -6,7 +6,7 @@ import (
 	"github.com/go-funcards/authz-service/internal/authz"
 	"github.com/go-funcards/mongodb"
 	"github.com/go-funcards/slice"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -17,13 +17,13 @@ const subCollection = "authz_subjects"
 
 type subStorage struct {
 	c   *mongo.Collection
-	log logrus.FieldLogger
+	log zerolog.Logger
 }
 
-func NewSubStorage(ctx context.Context, db *mongo.Database, log logrus.FieldLogger) *subStorage {
+func NewSubStorage(ctx context.Context, db *mongo.Database, log zerolog.Logger) *subStorage {
 	s := &subStorage{
 		c:   db.Collection(subCollection),
-		log: log,
+		log: log.With().Str("storage", "mongodb").Str("collection", subCollection).Logger(),
 	}
 	s.indexes(ctx)
 	return s
@@ -37,16 +37,10 @@ func (s *subStorage) indexes(ctx context.Context) {
 		Keys: bson.D{{"refs.ref_id", 1}},
 	})
 	if err != nil {
-		s.log.WithFields(logrus.Fields{
-			"collection": subCollection,
-			"error":      err,
-		}).Fatal("index not created")
+		s.log.Fatal().Err(err).Msg("index not created")
 	}
 
-	s.log.WithFields(logrus.Fields{
-		"collection": subCollection,
-		"name":       name,
-	}).Info("index created")
+	s.log.Info().Str("index.name", name).Msg("index created")
 }
 
 func (s *subStorage) Save(ctx context.Context, model authz.Subject) error {
@@ -62,10 +56,10 @@ func (s *subStorage) Save(ctx context.Context, model authz.Subject) error {
 	if deleteRefs := slice.Map(model.Refs, func(item authz.Ref) string {
 		return item.RefID
 	}); len(deleteRefs) > 0 {
-		s.log.WithFields(logrus.Fields{
-			"sub_id": model.SubID,
-			"refs":   deleteRefs,
-		}).Info("delete refs")
+		s.log.Info().
+			Str("sub_id", model.SubID).
+			Strs("refs", deleteRefs).
+			Msg("delete refs")
 
 		write = append(write, mongo.
 			NewUpdateOneModel().
@@ -98,7 +92,7 @@ func (s *subStorage) Save(ctx context.Context, model authz.Subject) error {
 		}),
 	)
 
-	s.log.WithField("sub_id", model.SubID).Info("sub save")
+	s.log.Info().Str("sub_id", model.SubID).Msg("sub save")
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -108,10 +102,7 @@ func (s *subStorage) Save(ctx context.Context, model authz.Subject) error {
 		return fmt.Errorf(fmt.Sprintf("sub save: %s", mongodb.ErrMsgQuery), err)
 	}
 
-	s.log.WithFields(logrus.Fields{
-		"sub_id": model.SubID,
-		"result": result,
-	}).Info("sub saved")
+	s.log.Info().Str("sub_id", model.SubID).Interface("result", result).Msg("sub saved")
 
 	return nil
 }
@@ -120,7 +111,7 @@ func (s *subStorage) Delete(ctx context.Context, sub string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	s.log.WithField("sub_id", sub).Debug("sub delete")
+	s.log.Info().Str("sub_id", sub).Msg("sub delete")
 	result, err := s.c.DeleteOne(ctx, bson.M{"_id": sub})
 	if err != nil {
 		return fmt.Errorf(mongodb.ErrMsgQuery, err)
@@ -128,7 +119,7 @@ func (s *subStorage) Delete(ctx context.Context, sub string) error {
 	if result.DeletedCount == 0 {
 		return fmt.Errorf(mongodb.ErrMsgQuery, mongo.ErrNoDocuments)
 	}
-	s.log.WithField("sub_id", sub).Debug("sub deleted")
+	s.log.Info().Str("sub_id", sub).Msg("sub deleted")
 
 	return nil
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/go-funcards/authz-service/internal/authz"
 	"github.com/go-funcards/mongodb"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -21,13 +21,13 @@ const (
 
 type defStorage struct {
 	c   *mongo.Collection
-	log logrus.FieldLogger
+	log zerolog.Logger
 }
 
-func NewDefStorage(ctx context.Context, db *mongo.Database, log logrus.FieldLogger) *defStorage {
+func NewDefStorage(ctx context.Context, db *mongo.Database, log zerolog.Logger) *defStorage {
 	s := &defStorage{
 		c:   db.Collection(defCollection),
-		log: log,
+		log: log.With().Str("storage", "mongodb").Str("collection", defCollection).Logger(),
 	}
 	s.indexes(ctx)
 	return s
@@ -42,16 +42,10 @@ func (s *defStorage) indexes(ctx context.Context) {
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
-		s.log.WithFields(logrus.Fields{
-			"collection": defCollection,
-			"error":      err,
-		}).Fatal("index not created")
+		s.log.Fatal().Err(err).Msg("index not created")
 	}
 
-	s.log.WithFields(logrus.Fields{
-		"collection": defCollection,
-		"name":       name,
-	}).Info("index created")
+	s.log.Info().Str("index.name", name).Msg("index created")
 }
 
 func (s *defStorage) SaveMany(ctx context.Context, models []authz.Definition) error {
@@ -72,7 +66,7 @@ func (s *defStorage) SaveMany(ctx context.Context, models []authz.Definition) er
 		)
 	}
 
-	s.log.Info("defs save")
+	s.log.Info().Msg("defs save")
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -82,7 +76,7 @@ func (s *defStorage) SaveMany(ctx context.Context, models []authz.Definition) er
 		return fmt.Errorf(fmt.Sprintf("defs save: %s", mongodb.ErrMsgQuery), err)
 	}
 
-	s.log.WithFields(logrus.Fields{"result": result}).Info("defs saved")
+	s.log.Info().Interface("result", result).Msg("defs saved")
 
 	return nil
 }
@@ -91,7 +85,7 @@ func (s *defStorage) DeleteMany(ctx context.Context, id ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	s.log.WithField("def_ids", id).Debug("defs delete")
+	s.log.Info().Strs("def_ids", id).Msg("defs delete")
 	result, err := s.c.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": id}})
 	if err != nil {
 		return fmt.Errorf(mongodb.ErrMsgQuery, err)
@@ -99,7 +93,7 @@ func (s *defStorage) DeleteMany(ctx context.Context, id ...string) error {
 	if result.DeletedCount == 0 {
 		return fmt.Errorf(mongodb.ErrMsgQuery, mongo.ErrNoDocuments)
 	}
-	s.log.WithField("def_ids", id).Debug("defs deleted")
+	s.log.Info().Strs("def_ids", id).Msg("defs deleted")
 
 	return nil
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/go-funcards/authz-service/internal/authz"
 	"github.com/go-funcards/mongodb"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,13 +18,13 @@ const ruleCollection = "authz_rules"
 
 type ruleStorage struct {
 	c   *mongo.Collection
-	log logrus.FieldLogger
+	log zerolog.Logger
 }
 
-func NewRuleStorage(ctx context.Context, db *mongo.Database, log logrus.FieldLogger) *ruleStorage {
+func NewRuleStorage(ctx context.Context, db *mongo.Database, log zerolog.Logger) *ruleStorage {
 	s := &ruleStorage{
 		c:   db.Collection(ruleCollection),
-		log: log,
+		log: log.With().Str("storage", "mongodb").Str("collection", ruleCollection).Logger(),
 	}
 	s.indexes(ctx)
 	return s
@@ -46,16 +46,10 @@ func (s *ruleStorage) indexes(ctx context.Context) {
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
-		s.log.WithFields(logrus.Fields{
-			"collection": ruleCollection,
-			"error":      err,
-		}).Fatal("index not created")
+		s.log.Fatal().Err(err).Msg("index not created")
 	}
 
-	s.log.WithFields(logrus.Fields{
-		"collection": ruleCollection,
-		"name":       name,
-	}).Info("index created")
+	s.log.Info().Str("index.name", name).Msg("index created")
 }
 
 func (s *ruleStorage) SaveMany(ctx context.Context, models []authz.Rule) error {
@@ -76,7 +70,7 @@ func (s *ruleStorage) SaveMany(ctx context.Context, models []authz.Rule) error {
 		)
 	}
 
-	s.log.Info("rules save")
+	s.log.Info().Msg("rules save")
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -86,7 +80,7 @@ func (s *ruleStorage) SaveMany(ctx context.Context, models []authz.Rule) error {
 		return fmt.Errorf(fmt.Sprintf("rules save: %s", mongodb.ErrMsgQuery), err)
 	}
 
-	s.log.WithFields(logrus.Fields{"result": result}).Info("rules saved")
+	s.log.Info().Interface("result", result).Msg("rules saved")
 
 	return nil
 }
@@ -95,7 +89,7 @@ func (s *ruleStorage) DeleteMany(ctx context.Context, id ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	s.log.WithField("rule_ids", id).Debug("rules delete")
+	s.log.Info().Strs("rule_ids", id).Msg("rules delete")
 	result, err := s.c.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": id}})
 	if err != nil {
 		return fmt.Errorf(mongodb.ErrMsgQuery, err)
@@ -103,7 +97,7 @@ func (s *ruleStorage) DeleteMany(ctx context.Context, id ...string) error {
 	if result.DeletedCount == 0 {
 		return fmt.Errorf(mongodb.ErrMsgQuery, mongo.ErrNoDocuments)
 	}
-	s.log.WithField("rule_ids", id).Debug("rules deleted")
+	s.log.Info().Strs("rule_ids", id).Msg("rules deleted")
 
 	return nil
 }

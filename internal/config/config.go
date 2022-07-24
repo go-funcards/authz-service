@@ -4,7 +4,7 @@ import (
 	"github.com/go-funcards/authz-service/internal/casbin"
 	"github.com/go-funcards/validate"
 	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"sync"
 )
 
@@ -26,12 +26,12 @@ var (
 	once sync.Once
 )
 
-func GetConfig(path string, log logrus.FieldLogger) Config {
+func GetConfig(path string, log zerolog.Logger) Config {
 	once.Do(func() {
-		log.Debugf("read config from path %s", path)
+		log.Debug().Msgf("read config from path %s", path)
 
 		if err := cleanenv.ReadConfig(path, &cfg); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 	})
 	return cfg
